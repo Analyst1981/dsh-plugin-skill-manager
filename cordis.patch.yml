@@ -1,0 +1,6 @@
+# dsh-plugin-skill-manager bundle patch: one row inserted over the profile
+# root. Requires a profile built on @deepseek-ai/dsh-base (tools, commands,
+# skills, and systemPrompt services), which every shipped dsh profile is.
+- insert:
+    - id: skill-manager
+      name: 'dsh-plugin-skill-manager'
