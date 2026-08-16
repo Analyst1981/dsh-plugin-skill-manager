@@ -44,6 +44,14 @@
   "engines": {
     "node": ">=20"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Analyst1981/dsh-plugin-skill-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Analyst1981/dsh-plugin-skill-manager/issues"
+  },
+  "homepage": "https://github.com/Analyst1981/dsh-plugin-skill-manager#readme",
   "license": "MIT",
   "dependencies": {
     "yaml": "^2.8.0"
