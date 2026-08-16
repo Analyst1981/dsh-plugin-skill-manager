@@ -82,6 +82,9 @@ test("integration: list shows seeded skill as registered in the live registry", 
 	const fixture = await bootFixture();
 	const result = await fixture.tool().execute({ action: "list" }, fixture.exec);
 	assert.equal(result.ok, true);
+	// Regression: tool results must survive lossless JSON round-trips — an
+	// undefined-valued key breaks the runtime serializer (observed in e2e).
+	assert.deepEqual(JSON.parse(JSON.stringify(result)), result, "tool result is lossless JSON");
 	const seeded = result.skills.find((skill) => skill.name === "seeded-skill");
 	assert.ok(seeded, "seeded skill listed");
 	assert.equal(seeded.registered, true);
@@ -150,6 +153,41 @@ test("integration: create/update/delete round-trip through the live skill regist
 	await cleanup(fixture);
 });
 
+test("integration: output.render turns every action result into text without throwing", async () => {
+	const fixture = await bootFixture();
+	const tool = fixture.tool();
+	assert.ok(tool.output?.render, "tool defines output.render");
+
+	// Regression: create/inspect results fed back through output.render crashed
+	// with "Cannot read properties of undefined (reading 'trim')" because the
+	// render path read entry.body while execute returns summarized entries.
+	const actions = [
+		tool.execute({ action: "roots" }, fixture.exec),
+		tool.execute({ action: "list" }, fixture.exec),
+		tool.execute(
+			{ action: "create", name: "render-check", description: "render smoke", content: "Body text." },
+			fixture.exec,
+		).then((result) => {
+			assert.equal(result.ok, true);
+			return tool.execute({ action: "inspect", name: "render-check" }, fixture.exec);
+		}),
+	];
+	const results = [];
+	for (const pending of actions) results.push(await pending);
+	results.push(await tool.execute({ action: "validate" }, fixture.exec));
+	results.push(
+		await tool.execute({ action: "update", name: "render-check", description: "render smoke v2" }, fixture.exec),
+	);
+	results.push(await tool.execute({ action: "delete", name: "render-check", confirm: true }, fixture.exec));
+
+	for (const result of results) {
+		assert.equal(result.ok, true);
+		const blocks = tool.output.render({}, result);
+		assert.ok(blocks.length > 0 && blocks.every((block) => typeof block.text === "string" && block.text.length > 0));
+	}
+	await cleanup(fixture);
+});
+
 test("integration: create refuses to clobber an existing skill name", async () => {
 	const fixture = await bootFixture();
 	await assert.rejects(
@@ -166,6 +204,7 @@ test("integration: validate reports broken skill files the loader skips", async 
 	await writeFile(join(brokenDir, "SKILL.md"), "---\nname: broken-skill\ndescription: [bad yaml\n---\nbody");
 	const result = await fixture.tool().execute({ action: "validate" }, fixture.exec);
 	assert.equal(result.ok, true);
+	assert.deepEqual(JSON.parse(JSON.stringify(result)), result, "tool result is lossless JSON");
 	assert.ok(result.problems.some((problem) => problem.includes("broken-skill")));
 	const registryNames = (await fixture.ctx.skills.list({ cwd: fixture.repo })).map((skill) => skill.name);
 	assert.equal(registryNames.includes("broken-skill"), false, "provider really skipped it");
